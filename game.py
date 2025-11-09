@@ -30,17 +30,35 @@ class Game:
         # الخلية الهدف
         target_cell = self.state.get_cell(new_r, new_c)
 
+        # جدار أو خارج الحدود
         if target_cell is None or target_cell == "#":
-            return  # جدار أو خارج الحدود → لا يتحرك
+            return
 
+        # ----------------------------
+        # إذا الخلية الهدف هي Finish
+        # ----------------------------
+        if target_cell == "F":
+            # إذا في أقفال بعد ما نُحلت → الطريق مسدود
+            if self.state.locks:
+                return
+            else:
+                # اللاعب وصل الهدف بعد حل كل الأقفال 🎉
+                self._update_position(pr, pc, new_r, new_c)
+                print("🎉 You won this level!")
+                return
+
+        # ----------------------------
         # إذا الخلية فارغة → يتحرك فقط
+        # ----------------------------
         if target_cell == ".":
             self._update_position(pr, pc, new_r, new_c)
             # بعد الحركة، نفحص التعابير
             self.check_expressions()
             return
 
+        # -------------------------------------------------
         # إذا الخلية فيها عنصر قابل للدفع (رقم أو + أو -)
+        # -------------------------------------------------
         if target_cell.isdigit() or target_cell in ["+", "-"]:
             push_r, push_c = new_r + dr, new_c + dc
             next_cell = self.state.get_cell(push_r, push_c)
@@ -54,11 +72,13 @@ class Game:
                 # بعد الحركة، نفحص التعابير
                 self.check_expressions()
                 return
-
-       
-
+            
         # إذا ما تحقق أي شرط → لا يتحرك
         return
+
+    # --------------------------
+    # دوال مساعدة
+    # --------------------------
 
     def _update_position(self, old_r, old_c, new_r, new_c):
         """تحديث موقع اللاعب على الخريطة"""
@@ -70,8 +90,38 @@ class Game:
         """عرض الخريطة"""
         self.state.display()
 
+    
+
+   
     def check_expressions(self):
-        """تفحص الخريطة وتعرض النتائج المكتشفة."""
+        """تفحص الخريطة وتفتح الأقفال عند حل التعابير."""
         results = scan_expressions(self.state.grid)
-        if results:
-            print("Detected expressions → Results:", results)
+
+        if not results:
+            return
+
+        print("Detected expressions → Results:", results)
+
+        locks_to_remove = []
+
+        # نمر على نتائج التعبيرات
+        for value in results:
+            # نحاول نلاقي قفل مطابق (مثل G5 لو القيمة 5)
+            key_to_remove = None
+            for lock_key, (r, c) in self.state.locks.items():
+                # نتحقق إذا رقم القفل يساوي القيمة الناتجة
+                if lock_key.startswith("G") and lock_key[1:] == str(value):
+                    print(f"🔓 Lock {lock_key} opened!")
+                    # نفتح القفل على الخريطة
+                    self.state.grid[r][c] = "."
+                    key_to_remove = lock_key
+                    break
+
+            # نحذف القفل بعد فتحه
+            if key_to_remove:
+                locks_to_remove.append(key_to_remove)
+
+        # نحذف المفاتيح المفتوحة من قاموس الأقفال
+        for key in locks_to_remove:
+            self.state.locks.pop(key, None)
+
