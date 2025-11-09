@@ -2,7 +2,7 @@ from level_loader import load_level
 from game import Game
 
 if __name__ == "__main__":
-    level = load_level("levels/level1.json")
+    level = load_level("levels/level2.json")
     game = Game(level)
 
     print("Math Push (Move with W/A/S/D, Q to quit)\n")

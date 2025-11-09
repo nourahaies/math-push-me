@@ -26,8 +26,6 @@ class Game:
 
         pr, pc = self.state.player_pos
         new_r, new_c = pr + dr, pc + dc
-
-        # الخلية الهدف
         target_cell = self.state.get_cell(new_r, new_c)
 
         # جدار أو خارج الحدود
@@ -38,11 +36,9 @@ class Game:
         # إذا الخلية الهدف هي Finish
         # ----------------------------
         if target_cell == "F":
-            # إذا في أقفال بعد ما نُحلت → الطريق مسدود
             if self.state.locks:
                 return
             else:
-                # اللاعب وصل الهدف بعد حل كل الأقفال 🎉
                 self._update_position(pr, pc, new_r, new_c)
                 print("🎉 You won this level!")
                 return
@@ -52,7 +48,6 @@ class Game:
         # ----------------------------
         if target_cell == ".":
             self._update_position(pr, pc, new_r, new_c)
-            # بعد الحركة، نفحص التعابير
             self.check_expressions()
             return
 
@@ -60,19 +55,41 @@ class Game:
         # إذا الخلية فيها عنصر قابل للدفع (رقم أو + أو -)
         # -------------------------------------------------
         if target_cell.isdigit() or target_cell in ["+", "-"]:
-            push_r, push_c = new_r + dr, new_c + dc
-            next_cell = self.state.get_cell(push_r, push_c)
+            # نحدد سلسلة الكتل المتتالية
+            blocks = []
+            cur_r, cur_c = new_r, new_c
 
-            # نتأكد إنو المكان يلي رح ندفع فيه فاضي
-            if next_cell == ".":
-                # نحرك الكتلة
-                self.state.grid[push_r][push_c] = target_cell
-                self._update_position(pr, pc, new_r, new_c)
-                self.state.grid[new_r][new_c] = "P"
-                # بعد الحركة، نفحص التعابير
-                self.check_expressions()
-                return
-            
+            while True:
+                cell = self.state.get_cell(cur_r, cur_c)
+                # إذا الخلية فيها رقم أو عامل → نضيفها للسلسلة
+                if cell and (cell.isdigit() or cell in ["+", "-"]):
+                    blocks.append((cur_r, cur_c, cell))
+                    cur_r += dr
+                    cur_c += dc
+                else:
+                    break
+
+            # الخلية بعد السلسلة
+            after_r, after_c = cur_r, cur_c
+            after_cell = self.state.get_cell(after_r, after_c)
+
+            # لازم تكون الخلية التالية فارغة
+            if after_cell != ".":
+                return  # ما في مساحة لدفش السلسلة
+
+            # دفش الكتل بترتيب عكسي (من الأخير للأول)
+            for r, c, val in reversed(blocks):
+                self.state.grid[r + dr][c + dc] = val
+                self.state.grid[r][c] = "."
+
+            # تحريك اللاعب لموقع أول كتلة
+            self._update_position(pr, pc, new_r, new_c)
+            self.state.grid[new_r][new_c] = "P"
+
+            # بعد الحركة، نفحص التعابير
+            self.check_expressions()
+            return
+
         # إذا ما تحقق أي شرط → لا يتحرك
         return
 
@@ -90,11 +107,8 @@ class Game:
         """عرض الخريطة"""
         self.state.display()
 
-    
-
-   
     def check_expressions(self):
-        """تفحص الخريطة وتفتح الأقفال عند حل التعابير."""
+        """تفحص الخريطة وتفتح الأقفال عند حل التعابير"""
         results = scan_expressions(self.state.grid)
 
         if not results:
@@ -104,24 +118,17 @@ class Game:
 
         locks_to_remove = []
 
-        # نمر على نتائج التعبيرات
         for value in results:
-            # نحاول نلاقي قفل مطابق (مثل G5 لو القيمة 5)
             key_to_remove = None
             for lock_key, (r, c) in self.state.locks.items():
-                # نتحقق إذا رقم القفل يساوي القيمة الناتجة
                 if lock_key.startswith("G") and lock_key[1:] == str(value):
                     print(f"🔓 Lock {lock_key} opened!")
-                    # نفتح القفل على الخريطة
                     self.state.grid[r][c] = "."
                     key_to_remove = lock_key
                     break
 
-            # نحذف القفل بعد فتحه
             if key_to_remove:
                 locks_to_remove.append(key_to_remove)
 
-        # نحذف المفاتيح المفتوحة من قاموس الأقفال
         for key in locks_to_remove:
             self.state.locks.pop(key, None)
-
