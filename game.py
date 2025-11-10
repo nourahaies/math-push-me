@@ -3,15 +3,15 @@ from evaluator import scan_expressions
 
 class Game:
     def __init__(self, level_data):
-        # إنشاء حالة اللعبة
         from state import GameState
+        from copy import deepcopy
+
         self.state = GameState(level_data)
+        self.initial_grid = deepcopy(self.state.grid)
+
 
     def move_player(self, direction):
-        """
-        يحرك اللاعب في الاتجاه المطلوب إذا كان ذلك ممكنًا.
-        الاتجاهات المقبولة: up, down, left, right
-        """
+        """يحرك اللاعب في الاتجاه المطلوب إذا كان ذلك ممكنًا."""
         dr, dc = 0, 0
         if direction == "up":
             dr, dc = -1, 0
@@ -22,15 +22,19 @@ class Game:
         elif direction == "right":
             dr, dc = 0, 1
         else:
-            return  # اتجاه غير معروف
+            return
 
         pr, pc = self.state.player_pos
         new_r, new_c = pr + dr, pc + dc
+
         target_cell = self.state.get_cell(new_r, new_c)
 
         # جدار أو خارج الحدود
         if target_cell is None or target_cell == "#":
             return
+
+        # 🟢 حفظ الحالة قبل أي تغيير
+        self.state.save_state()
 
         # ----------------------------
         # إذا الخلية الهدف هي Finish
@@ -55,67 +59,63 @@ class Game:
         # إذا الخلية فيها عنصر قابل للدفع (رقم أو + أو -)
         # -------------------------------------------------
         if target_cell.isdigit() or target_cell in ["+", "-"]:
-            # نحدد سلسلة الكتل المتتالية
-            blocks = []
-            cur_r, cur_c = new_r, new_c
-
+            # نجمع كل الكتل المتجاورة بنفس الاتجاه
+            movable_blocks = []
+            r, c = new_r, new_c
             while True:
-                cell = self.state.get_cell(cur_r, cur_c)
-                # إذا الخلية فيها رقم أو عامل → نضيفها للسلسلة
+                cell = self.state.get_cell(r, c)
                 if cell and (cell.isdigit() or cell in ["+", "-"]):
-                    blocks.append((cur_r, cur_c, cell))
-                    cur_r += dr
-                    cur_c += dc
+                    movable_blocks.append((r, c, cell))
+                    r += dr
+                    c += dc
                 else:
                     break
 
-            # الخلية بعد السلسلة
-            after_r, after_c = cur_r, cur_c
-            after_cell = self.state.get_cell(after_r, after_c)
+            next_cell = self.state.get_cell(r, c)
 
-            # لازم تكون الخلية التالية فارغة
-            if after_cell != ".":
-                return  # ما في مساحة لدفش السلسلة
+            # لازم الخلية التالية تكون فاضية
+            if next_cell == ".":
+                # نحرك الكتل ابتداءً من الأبعد
+                for (br, bc, val) in reversed(movable_blocks):
+                    self.state.grid[br + dr][bc + dc] = val
+                    self.state.grid[br][bc] = "."
 
-            # دفش الكتل بترتيب عكسي (من الأخير للأول)
-            for r, c, val in reversed(blocks):
-                self.state.grid[r + dr][c + dc] = val
-                self.state.grid[r][c] = "."
-
-            # تحريك اللاعب لموقع أول كتلة
-            self._update_position(pr, pc, new_r, new_c)
-            self.state.grid[new_r][new_c] = "P"
-
-            # بعد الحركة، نفحص التعابير
-            self.check_expressions()
-            return
+                # ثم نحرك اللاعب
+                self._update_position(pr, pc, new_r, new_c)
+                self.check_expressions()
+                return
 
         # إذا ما تحقق أي شرط → لا يتحرك
         return
 
     # --------------------------
+    # 🟣 دالة التراجع (Undo)
+    # --------------------------
+    def undo(self):
+        """تُرجع اللعبة لحالتها السابقة."""
+        success = self.state.restore_state()
+        if success:
+            print("↩️ Undo successful.")
+        else:
+            print("⚠️ Nothing to undo.")
+
+    # --------------------------
     # دوال مساعدة
     # --------------------------
-
     def _update_position(self, old_r, old_c, new_r, new_c):
-        """تحديث موقع اللاعب على الخريطة"""
         self.state.grid[old_r][old_c] = "."
         self.state.grid[new_r][new_c] = "P"
         self.state.player_pos = (new_r, new_c)
 
     def display(self):
-        """عرض الخريطة"""
         self.state.display()
 
     def check_expressions(self):
-        """تفحص الخريطة وتفتح الأقفال عند حل التعابير"""
         results = scan_expressions(self.state.grid)
-
         if not results:
             return
 
         print("Detected expressions → Results:", results)
-
         locks_to_remove = []
 
         for value in results:
@@ -132,3 +132,11 @@ class Game:
 
         for key in locks_to_remove:
             self.state.locks.pop(key, None)
+
+    def reset(self):
+        """إعادة اللعبة إلى حالتها الأصلية"""
+        from copy import deepcopy
+        # نرجع الحالة الأصلية
+        self.state.grid = deepcopy(self.initial_grid)
+        self.state.find_positions()
+        print("🔁 Game reset!")
