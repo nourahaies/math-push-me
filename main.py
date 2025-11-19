@@ -26,7 +26,7 @@ if __name__ == "__main__":
             game.move_player("right")
 
         elif move == "u":
-            game.undo()  # ← نرجع خطوة واحدة للخلف
+            game.undo()  
 
         elif move == "r":
             game.reset()

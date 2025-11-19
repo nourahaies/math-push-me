@@ -10,14 +10,13 @@ class GameState:
         self.goal_pos = None
         self.locks = {}
 
-        # 🟢 قائمة لتخزين الحالات السابقة
         self.history = []
-        self.max_history = 100  # الحد الأقصى لعدد الخطوات القابلة للتراجع
+        self.max_history = 100 
 
         self.find_positions()
 
     def find_positions(self):
-        """تبحث في الخريطة عن موقع اللاعب، الأقفال، والهدف."""
+
         for r in range(self.rows):
             for c in range(self.cols):
                 cell = self.grid[r][c]
@@ -29,11 +28,11 @@ class GameState:
                 elif cell == "F":
                     self.goal_pos = (r, c)
 
-    # ------------------------------
-    # 🧩 نظام الـ Undo
-    # ------------------------------
+    
+    #    Undo
+    
     def save_state(self):
-        """تحفظ نسخة من الحالة الحالية قبل أي تغيير."""
+        
         snapshot = {
             "grid": copy.deepcopy(self.grid),
             "player_pos": self.player_pos,
@@ -45,7 +44,7 @@ class GameState:
             self.history.pop(0)
 
     def restore_state(self):
-        """ترجع آخر حالة محفوظة (تراجع خطوة واحدة)."""
+        
         if not self.history:
             print("No previous state to undo.")
             return False
@@ -56,7 +55,7 @@ class GameState:
         self.locks = copy.deepcopy(snapshot["locks"])
         return True
 
-    # ------------------------------
+    
     def display(self):
         for r in range(self.rows):
             print(" ".join(self.grid[r]))

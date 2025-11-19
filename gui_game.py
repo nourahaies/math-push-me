@@ -63,12 +63,15 @@ class MathPushGUI:
         
         # Get all level files from the levels directory
         level_files = glob.glob("levels/level*.json")
-        level_names = [os.path.basename(f) for f in level_files]
+        # Also include field files
+        field_files = glob.glob("levels/field*.json")
+        all_level_files = level_files + field_files
+        level_names = [os.path.basename(f) for f in all_level_files]
         level_names.sort()
         
         # If no levels found, provide default options
         if not level_names:
-            level_names = ["level1.json", "level2.json"]
+            level_names = ["level1.json", "level2.json", "field5.json"]
         
         self.level_var = tk.StringVar(value=level_names[0] if level_names else "level1.json")
         

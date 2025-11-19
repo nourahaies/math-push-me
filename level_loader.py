@@ -1,18 +1,8 @@
 import json
 import os
 
-import json
-import os
 
 def load_level(level_path):
-    """
-    Load a level file and return level data in the unified format:
-    {
-        "rows": int,
-        "cols": int,
-        "grid": [ [cells...] ]
-    }
-    """
 
     if not os.path.exists(level_path):
         raise FileNotFoundError(f"file not found : {level_path}")
@@ -28,9 +18,6 @@ def load_level(level_path):
 
 
 def convert_format(raw):
-    """
-    Converts JSON format into the game's grid format.
-    """
 
     rows = raw["rows"]
     cols = raw["cols"]
