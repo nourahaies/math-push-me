@@ -8,7 +8,7 @@ class Game:
 
         self.state = GameState(level_data)
         self.initial_grid = deepcopy(self.state.grid)
-
+        self.results = []  # Array to store results of solved expressions
 
     def move_player(self, direction):
         """يحرك اللاعب في الاتجاه المطلوب إذا كان ذلك ممكنًا."""
@@ -31,6 +31,8 @@ class Game:
 
         # جدار أو خارج الحدود
         if target_cell is None or target_cell == "#":
+            # Print results array even when move is invalid
+            print("Results array:", self.results)
             return
 
         # 🟢 حفظ الحالة قبل أي تغيير
@@ -41,6 +43,8 @@ class Game:
         # ----------------------------
         if target_cell == "F":
             if self.state.locks:
+                # Print results array
+                print("Results array:", self.results)
                 return
             else:
                 self._update_position(pr, pc, new_r, new_c)
@@ -86,6 +90,8 @@ class Game:
                 return
 
         # إذا ما تحقق أي شرط → لا يتحرك
+        # Print results array when no movement occurs
+        print("Results array:", self.results)
         return
 
     # --------------------------
@@ -112,17 +118,34 @@ class Game:
 
     def check_expressions(self):
         results = scan_expressions(self.state.grid)
+        
+        # Only print results array if it's not empty
+        if self.results:
+            print("Results so far:", self.results)
+        
+        # Only process if we have detected expressions
         if not results:
             return
-
-        print("Detected expressions → Results:", results)
+        
+        # Print detected expressions for debugging
+        print("New expressions found:", results)
+        
+        # Process each detected result
         locks_to_remove = []
+        new_results_found = False
 
         for value in results:
+            # Add the result to our results array if not already there
+            if value not in self.results:
+                self.results.append(value)
+                new_results_found = True
+                print(f"Solved: {value}")
+            
+            # Check if this result opens any locks
             key_to_remove = None
             for lock_key, (r, c) in self.state.locks.items():
                 if lock_key.startswith("G") and lock_key[1:] == str(value):
-                    print(f"🔓 Lock {lock_key} opened!")
+                    print(f"🔓 Opened door {lock_key}!")
                     self.state.grid[r][c] = "."
                     key_to_remove = lock_key
                     break
@@ -130,8 +153,13 @@ class Game:
             if key_to_remove:
                 locks_to_remove.append(key_to_remove)
 
+        # Remove opened locks
         for key in locks_to_remove:
             self.state.locks.pop(key, None)
+            
+        # If we found new results, print the updated array
+        if new_results_found and self.results:
+            print("All results:", self.results)
 
     def reset(self):
         """إعادة اللعبة إلى حالتها الأصلية"""

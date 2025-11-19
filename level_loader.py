@@ -1,20 +1,71 @@
 import json
 import os
 
+import json
+import os
+
 def load_level(level_path):
     """
-    load a level from a file and get it's data as a JSON array.
+    Load a level file and return level data in the unified format:
+    {
+        "rows": int,
+        "cols": int,
+        "grid": [ [cells...] ]
+    }
     """
+
     if not os.path.exists(level_path):
         raise FileNotFoundError(f"file not found : {level_path}")
-    
+
     with open(level_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        raw = json.load(f)
 
-    # التحقق من أن المفاتيح الأساسية موجودة
-    required_keys = ["rows", "cols", "grid"]
-    for key in required_keys:
-        if key not in data:
-            raise ValueError(f"file  {level_path}    doesn't have the key '{key}'")
+    if "grid" in raw and isinstance(raw["grid"], list):
+        return raw
 
-    return data
+    print(" Loading format... converting...")
+    return convert_format(raw)
+
+
+def convert_format(raw):
+    """
+    Converts JSON format into the game's grid format.
+    """
+
+    rows = raw["rows"]
+    cols = raw["cols"]
+
+    grid = [["." for _ in range(cols)] for _ in range(rows)]
+
+    for obj in raw["cells"]:
+        r = obj["row"]
+        c = obj["col"]
+        t = obj["type"]
+
+        if t == "agent":
+            grid[r][c] = "P"
+
+        elif t == "target":
+            grid[r][c] = "F"
+
+        elif t == "number":
+            grid[r][c] = str(obj["number"])
+
+        elif t == "operation":
+            grid[r][c] = obj["operation"]
+
+        elif t == "door":
+            value = obj["value"]
+            grid[r][c] = "G" + str(value)
+
+        elif t == "block":
+            grid[r][c] = "#"
+
+        else:
+            raise ValueError(f"Unknown cell type : {t}")
+
+    return {
+        "rows": rows,
+        "cols": cols,
+        "grid": grid
+    }
