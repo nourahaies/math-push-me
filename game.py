@@ -91,12 +91,12 @@ class Game:
     #    (Undo)
     
     def undo(self):
-        """تُرجع اللعبة لحالتها السابقة."""
+        
         success = self.state.restore_state()
         if success:
-            print("↩️ Undo successful.")
+            print("Undo successful.")
         else:
-            print("⚠️ Nothing to undo.")
+            print("Nothing to undo.")
 
     
     def _update_position(self, old_r, old_c, new_r, new_c):
