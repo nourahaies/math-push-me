@@ -1,11 +1,13 @@
 from level_loader import load_level
 from game import Game
+from successor import get_successors
+
 
 if __name__ == "__main__":
     level = load_level("levels/field5.json")
     game = Game(level)
 
-    print("Math Push (Move with W/A/S/D, Q to quit)\n")
+    print("Math Push (Move with W/A/S/D, Q to quit, t to know possible states)\n")
 
     game.display()
 
@@ -30,6 +32,25 @@ if __name__ == "__main__":
 
         elif move == "r":
             game.reset()
+
+        elif move == "t":
+            succs = get_successors(game)
+            if not succs:
+                print("No legal successor states from current position.")
+            else:
+                for s in succs:
+                    print("---- State from action:", s["action"], "----")
+                    print("Player:", s["player_pos"])
+                    print("Locks:", list(s["locks"].keys()))
+                    if s["exprs_solved"]:
+                        print("New expressions solved:", s["exprs_solved"])
+                    print("Results after move:", s["results"])
+                    print("Grid:")
+                    for row in s["grid"]:
+                        print(" ".join(row))
+                    print()
+                    print("---------------------------------------------------------------------------------------------")
+    
     
 
         game.display()
