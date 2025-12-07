@@ -1,10 +1,12 @@
 #main.py
+from solver_dfs import dfs_solve    
 from level_loader import load_level
 from game import Game
 from successor import get_successors
 
 
 if __name__ == "__main__":
+    #level = load_level("levels/level1.json")
     level = load_level("levels/field5.json")
     game = Game(level)
 
@@ -51,7 +53,19 @@ if __name__ == "__main__":
                         print(" ".join(row))
                     print()
                     print("---------------------------------------------------------------------------------------------")
-    
+        elif move == "z":
+            print("Running DFS solver... (this may take a while)")
+            goal_snapshot, generated_count, path = dfs_solve(game, max_nodes=1000000)
+            if goal_snapshot is None:
+                print("No solution found within node limit.")
+                print("Generated nodes:", generated_count)
+            else:
+                print("Goal found!")
+                print("Generated nodes:", generated_count)
+                print("Goal player position:", goal_snapshot["player_pos"])
+                print("Path length:", len(path))
+                print("Path actions:", path)
+
     
 
         game.display()
