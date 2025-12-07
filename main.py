@@ -1,3 +1,4 @@
+#main.py
 from level_loader import load_level
 from game import Game
 from successor import get_successors

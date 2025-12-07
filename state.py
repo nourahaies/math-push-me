@@ -1,3 +1,4 @@
+#state.py
 import copy
 
 class GameState:
