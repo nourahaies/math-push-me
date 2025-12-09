@@ -26,16 +26,8 @@ def _reconstruct_path(nodes, goal_index):
     return path
 
 
-def dfs_solve(game, max_nodes=1000000):
-    """
-    DFS search.
-    Returns:
-      goal_snapshot, generated_nodes_count, path_actions
-    Or:
-      None, generated_nodes_count, None
-    """
+def dfs_solve(game, max_nodes=100000):
 
-    # Root node
     root_state = deepcopy(game.state)
     root_results = deepcopy(game.results)
 
@@ -49,16 +41,18 @@ def dfs_solve(game, max_nodes=1000000):
     nodes.append(root_node)
 
     stack = [0]
-
     visited = set()
+
     visited.add(
         _state_signature(root_state.grid, root_state.player_pos, root_state.locks, root_results)
     )
 
-    generated = 1  # count nodes
+    generated = 1
 
     print(f"\n=== DFS START (limit={max_nodes}) ===")
-    print(f"Root pos={root_state.player_pos}  Locks={list(root_state.locks.keys())}\n")
+    print(f"Root position = {root_state.player_pos}   Locks={list(root_state.locks.keys())}\n")
+
+    step_counter = 0
 
     while stack:
         current_idx = stack.pop()
@@ -66,6 +60,12 @@ def dfs_solve(game, max_nodes=1000000):
 
         cur_state = node["state"]
         cur_results = node["results"]
+
+        step_counter += 1
+        print(f"\n----- Node {current_idx} expanded (Step {step_counter}) -----")
+        print(f"Player pos: {cur_state.player_pos}")
+        print(f"Remaining locks: {cur_state.locks}")
+        print("---------------------------------------------")
 
         # Goal check
         if cur_state.player_pos == cur_state.goal_pos and not cur_state.locks:
@@ -76,12 +76,14 @@ def dfs_solve(game, max_nodes=1000000):
                 "results": list(cur_results)
             }
             path = _reconstruct_path(nodes, current_idx)
+
             print("\n✔ GOAL FOUND!")
             print(f"Generated nodes: {generated}")
             print(f"Path length: {len(path)}")
+            print("Path =", path)
             return goal_snapshot, generated, path
 
-        # Build successor generator
+        # Successors
         class _MiniGame:
             def __init__(self, s, r):
                 self.state = s
@@ -97,12 +99,18 @@ def dfs_solve(game, max_nodes=1000000):
             results_s = s["results"]
             action_s = s["action"]
 
+            print(f" Trying action: {action_s} → moves to {pos_s}")
+
             sig = _state_signature(grid_s, pos_s, locks_s, results_s)
+
             if sig in visited:
+                print("   ⤷ Skipped (already visited)")
                 continue
 
-            # Quick goal check BEFORE building GameState
+            # Quick goal check
             if pos_s == cur_state.goal_pos and not locks_s:
+                print(f"   ✔ Direct goal reached via {action_s}")
+
                 goal_snapshot = {
                     "grid": deepcopy(grid_s),
                     "player_pos": pos_s,
@@ -110,7 +118,6 @@ def dfs_solve(game, max_nodes=1000000):
                     "results": list(results_s)
                 }
 
-                # Build miniature node to reconstruct path
                 temp = {
                     "state": None,
                     "results": deepcopy(results_s),
@@ -121,12 +128,13 @@ def dfs_solve(game, max_nodes=1000000):
                 goal_index = len(nodes) - 1
 
                 path = _reconstruct_path(nodes, goal_index)
-                print("\n✔ GOAL FOUND (direct successor)!")
-                print(f"Generated nodes: {generated}")
-                print(f"Path length: {len(path)}")
+
+                print("   ✔ Path =", path)
                 return goal_snapshot, generated + 1, path
 
             # Normal expansion
+            print(f"   ✓ Added new node. Player at {pos_s}, Locks={locks_s}")
+
             level_data = {
                 "rows": len(grid_s),
                 "cols": len(grid_s[0]),
@@ -150,7 +158,7 @@ def dfs_solve(game, max_nodes=1000000):
             visited.add(sig)
             generated += 1
 
-            if max_nodes and generated >= max_nodes:
+            if generated >= max_nodes:
                 print("\n✖ Node limit reached! No solution found.")
                 return None, generated, None
 
