@@ -1,148 +1,156 @@
 # solver_astar.py
 from copy import deepcopy
-import heapq
 from state import GameState
 from successor import get_successors
+import heapq
+import time
 
-# ---------- إعدادات البحث ----------
-LOCK_PENALTY = 20       # الوزن المعطى لوجود كل قفل (يمكن التعديل)
-PRINT_EVERY = 1000      # كل كم عقدة نطبع حالة للتتبع (0 = لا طباعة دورية)
-
-# ------------------------------
 def _state_signature(grid, player_pos, locks, results):
-    """
-    تُستخدَم لتوليد توقيع (hashable) للحالة لتجنّب الزيارات المكررة.
-    نستخدم grid (frozen), player_pos, locks (sorted), results (sorted).
-    """
+    """Create a compact hashable signature for a state."""
     frozen_grid = tuple(tuple(row) for row in grid)
     frozen_locks = tuple(sorted(((k, v[0], v[1]) for k, v in locks.items())))
     frozen_results = tuple(sorted(results))
     return (player_pos, frozen_grid, frozen_locks, frozen_results)
 
-def _reconstruct_path(came_from, end_key):
-    """
-    تعيد تسلسل الأفعال من البداية إلى النهاية.
-    came_from maps: key -> (parent_key, action)
-    end_key هو التوقيع النهائي الذي نصل إليه.
-    """
+def _reconstruct_path(nodes, goal_index):
+    """Reconstruct the actions path from root to goal."""
     path = []
-    cur = end_key
-    while cur in came_from and came_from[cur][0] is not None:
-        parent, action = came_from[cur]
-        path.append(action)
-        cur = parent
+    idx = goal_index
+    while idx is not None:
+        node = nodes[idx]
+        act = node["action_from_parent"]
+        if act is not None:
+            path.append(act)
+        idx = node["parent"]
     path.reverse()
     return path
 
-def manhattan(a, b):
+def _manhattan(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-def heuristic(player_pos, goal_pos, locks_left):
+def _collect_interest_positions(grid):
     """
-    heuristic = Manhattan distance + LOCK_PENALTY * number_of_locks
+    جمع مواقع الأرقام والعمليات والأقفال والهدف
+    يساعدنا لبناء heuristic سريع.
     """
-    if goal_pos is None:
-        return 0
-    return manhattan(player_pos, goal_pos) + len(locks_left) * LOCK_PENALTY
+    nums_ops = []
+    locks = []
+    goal = None
+    rows = len(grid)
+    cols = len(grid[0]) if rows else 0
+    for r in range(rows):
+        for c in range(cols):
+            cell = grid[r][c]
+            if cell is None:
+                continue
+            if cell.isdigit() or cell in ["+", "-"]:
+                nums_ops.append((r, c))
+            if isinstance(cell, str) and cell.startswith("G"):
+                locks.append((r, c))
+            if cell == "F":
+                goal = (r, c)
+    return nums_ops, locks, goal
 
-# ------------------------------
-def astar_solve(game, max_nodes=1000000):
+def heuristic_estimate(grid, player_pos, locks_map):
+    # إذا في أقفال باقيين → أعطي عقوبة ضخمة
+    lock_penalty = 1000 * len(locks_map)
+
+    # أقرب هدف فرعي (رقم / عملية / قفل)
+    nums_ops, locks_positions, goal_pos = _collect_interest_positions(grid)
+    best = float('inf')
+
+    for p in nums_ops:
+        best = min(best, _manhattan(player_pos, p))
+    for p in locks_positions:
+        best = min(best, _manhattan(player_pos, p))
+
+    if not locks_map and goal_pos:
+        best = _manhattan(player_pos, goal_pos)
+
+    return lock_penalty + (best if best < float('inf') else 0)
+
+
+def astar_solve(game, max_nodes=1000000, progress_interval=50000):
     """
-    A* search from current game.state and game.results.
-    Returns (goal_snapshot, generated_nodes_count, path_actions) or (None, generated_count, None)
+    A* solver.
+    Returns (goal_snapshot, generated_nodes_count, path_actions) or (None, gen_count, None)
     """
+    start_time = time.time()
 
-    # root (start) state
-    start_state = deepcopy(game.state)
-    start_results = deepcopy(game.results)
+    root_state = deepcopy(game.state)
+    root_results = deepcopy(game.results)
 
-    start_sig = _state_signature(start_state.grid, start_state.player_pos, start_state.locks, start_results)
-    goal_pos = start_state.goal_pos
-
-    # open set: heap of (f, g, counter, signature, node_data)
-    # node_data = { "grid":..., "player_pos":..., "locks":..., "results":..., "action_from_parent":..., "parent_sig":... }
-    open_heap = []
-    counter = 0  # tie-breaker for heap
-
-    g_score = { start_sig: 0 }
-    f_score = { start_sig: heuristic(start_state.player_pos, goal_pos, start_state.locks) }
-
-    start_node = {
-        "grid": deepcopy(start_state.grid),
-        "player_pos": start_state.player_pos,
-        "locks": deepcopy(start_state.locks),
-        "results": list(start_results),
+    # nodes array holds node dicts so we can reconstruct path
+    nodes = []
+    root_node = {
+        "state": root_state,
+        "results": root_results,
         "action_from_parent": None,
-        "parent_sig": None
+        "parent": None,
+        "g": 0
     }
+    nodes.append(root_node)
 
-    heapq.heappush(open_heap, (f_score[start_sig], g_score[start_sig], counter, start_sig, start_node))
-    counter += 1
+    # priority queue holds (f, node_index)
+    pq = []
+    start_h = heuristic_estimate(root_state.grid, root_state.player_pos, root_state.locks)
+    heapq.heappush(pq, (start_h, 0))
 
-    came_from = {}  # signature -> (parent_signature, action_str)
-    came_from[start_sig] = (None, None)
-
-    closed = set()
+    # visited map: signature -> best g found
+    visited = {}
+    sig_root = _state_signature(root_state.grid, root_state.player_pos, root_state.locks, root_results)
+    visited[sig_root] = 0
 
     generated = 1
-    expansions = 0
+    expanded = 0
 
-    print(f"\n=== A* START (max_nodes={max_nodes}) ===")
-    print(f"Start pos={start_state.player_pos}  Locks={list(start_state.locks.keys())}\n")
+    print(f"\n=== A* START (limit={max_nodes}) ===")
+    print(f"Root pos={root_state.player_pos}  Locks={list(root_state.locks.keys())}\n")
+    last_report = 0
 
-    while open_heap:
-        f, g, _, cur_sig, cur_node = heapq.heappop(open_heap)
-
-        # if already processed in closed (we may have old entries in heap)
-        if cur_sig in closed:
+    while pq:
+        f, idx = heapq.heappop(pq)
+        node = nodes[idx]
+        g = node["g"]
+        # skip if this node is outdated (we might have inserted a better g for same signature)
+        cur_sig = _state_signature(node["state"].grid, node["state"].player_pos, node["state"].locks, node["results"])
+        if visited.get(cur_sig, float('inf')) < g:
             continue
 
-        expansions += 1
-        if PRINT_EVERY and expansions % PRINT_EVERY == 0:
-            print(f"--- Expanded {expansions} nodes (generated {generated}) ---")
-            print(f" Current node player={cur_node['player_pos']}  locks_left={len(cur_node['locks'])}")
+        expanded += 1
+        # progress printing
+        if expanded - last_report >= progress_interval:
+            elapsed = time.time() - start_time
+            print(f"--- Expanded {expanded} nodes (generated {generated}) ---")
+            print(f" Current node player={node['state'].player_pos}  locks_left={len(node['state'].locks)}  time={elapsed:.1f}s")
             print("-----------------------------------------------------")
+            last_report = expanded
 
-        # Goal check: player on goal_pos and no locks remain
-        if cur_node["player_pos"] == goal_pos and not cur_node["locks"]:
-            # reconstruct path
-            path = _reconstruct_path(came_from, cur_sig)
+        # goal check
+        st = node["state"]
+        if st.player_pos == st.goal_pos and not st.locks:
             goal_snapshot = {
-                "grid": deepcopy(cur_node["grid"]),
-                "player_pos": cur_node["player_pos"],
-                "locks": deepcopy(cur_node["locks"]),
-                "results": list(cur_node["results"])
+                "grid": deepcopy(st.grid),
+                "player_pos": st.player_pos,
+                "locks": deepcopy(st.locks),
+                "results": list(node["results"])
             }
+            path = _reconstruct_path(nodes, idx)
             print("\n✔ GOAL FOUND!")
             print(f"Generated nodes: {generated}")
-            print(f"Expanded nodes: {expansions}")
+            print(f"Expanded nodes: {expanded}")
             print(f"Path length: {len(path)}")
             return goal_snapshot, generated, path
 
-        # mark closed
-        closed.add(cur_sig)
-
-        # create a mini-game object for successors
+        # generate successors using the helper (simulate on copies)
         class _MiniGame:
-            def __init__(self, grid, player_pos, locks, results):
-                # build a GameState-like structure for successor.get_successors usage
-                level_data = {
-                    "rows": len(grid),
-                    "cols": len(grid[0]) if grid else 0,
-                    "grid": deepcopy(grid)
-                }
-                self.state = GameState(level_data)
-                # override properties to reflect snapshot exactly
-                self.state.grid = deepcopy(grid)
-                self.state.player_pos = player_pos
-                self.state.locks = deepcopy(locks)
-                self.state.find_positions()  # ensure goal_pos is set (from grid)
-                self.results = list(results)
+            def __init__(self, state, results):
+                self.state = state
+                self.results = results
 
-        mg = _MiniGame(cur_node["grid"], cur_node["player_pos"], cur_node["locks"], cur_node["results"])
+        mg = _MiniGame(deepcopy(st), deepcopy(node["results"]))
         succs = get_successors(mg)
 
-        # process successors
         for s in succs:
             grid_s = s["grid"]
             pos_s = s["player_pos"]
@@ -150,41 +158,71 @@ def astar_solve(game, max_nodes=1000000):
             results_s = s["results"]
             action_s = s["action"]
 
-            sig_s = _state_signature(grid_s, pos_s, locks_s, results_s)
+            # compute g for successor (cost per move = 1)
+            g_s = g + 1
 
-            if sig_s in closed:
+            sig = _state_signature(grid_s, pos_s, locks_s, results_s)
+            prev_g = visited.get(sig)
+            if prev_g is not None and g_s >= prev_g:
+                # we already have an equal or better path to this signature
                 continue
 
-            tentative_g = g + 1  # each move cost = 1 (can be adjusted)
-
-            prev_g = g_score.get(sig_s, None)
-            if prev_g is None or tentative_g < prev_g:
-                # better path found to sig_s
-                g_score[sig_s] = tentative_g
-                h = heuristic(pos_s, goal_pos, locks_s)
-                f_s = tentative_g + h
-
-                node_s = {
+            # quick direct-successor goal check (if move reaches goal and locks cleared)
+            if (pos_s == st.goal_pos) and (not locks_s):
+                goal_snapshot = {
                     "grid": deepcopy(grid_s),
                     "player_pos": pos_s,
                     "locks": deepcopy(locks_s),
-                    "results": list(results_s),
-                    "action_from_parent": action_s,
-                    "parent_sig": cur_sig
+                    "results": list(results_s)
                 }
+                # create temp node to reconstruct path
+                temp = {
+                    "state": None,
+                    "results": deepcopy(results_s),
+                    "action_from_parent": action_s,
+                    "parent": idx,
+                    "g": g_s
+                }
+                nodes.append(temp)
+                goal_index = len(nodes) - 1
+                path = _reconstruct_path(nodes, goal_index)
+                print("\n✔ GOAL FOUND (direct successor)!")
+                print(f"Generated nodes: {generated}")
+                print(f"Expanded nodes: {expanded}")
+                print(f"Path length: {len(path)}")
+                return goal_snapshot, generated + 1, path
 
-                came_from[sig_s] = (cur_sig, action_s)
+            # otherwise add new node
+            level_data = {
+                "rows": len(grid_s),
+                "cols": len(grid_s[0]) if grid_s else 0,
+                "grid": deepcopy(grid_s)
+            }
+            gs = GameState(level_data)
+            gs.locks = deepcopy(locks_s)
+            gs.player_pos = pos_s
 
-                heapq.heappush(open_heap, (f_s, tentative_g, counter, sig_s, node_s))
-                counter += 1
-                generated += 1
+            new_node = {
+                "state": gs,
+                "results": deepcopy(results_s),
+                "action_from_parent": action_s,
+                "parent": idx,
+                "g": g_s
+            }
+            nodes.append(new_node)
+            new_idx = len(nodes) - 1
 
-                # safety stop
-                if max_nodes and generated >= max_nodes:
-                    print("\n✖ Node limit reached! No solution found within node limit.")
-                    return None, generated, None
+            # heuristic
+            h = heuristic_estimate(grid_s, pos_s, locks_s)
+            f_new = g_s + h
 
-    # no solution found
-    print("\n✖ A* exhausted open set. No solution found.")
-    print(f"Generated nodes: {generated}  Expanded: {expansions}")
+            heapq.heappush(pq, (f_new, new_idx))
+            visited[sig] = g_s
+            generated += 1
+
+            if max_nodes and generated >= max_nodes:
+                print("\n✖ Node limit reached! No solution found.")
+                return None, generated, None
+
+    print("\n✖ A* ended. No solution found.")
     return None, generated, None
