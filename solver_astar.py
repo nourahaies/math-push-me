@@ -186,7 +186,7 @@ def astar_solve(game, max_nodes=1000000, progress_interval=50000):
                 nodes.append(temp)
                 goal_index = len(nodes) - 1
                 path = _reconstruct_path(nodes, goal_index)
-                print("\n✔ GOAL FOUND (direct successor)!")
+                print("\n✔ GOAL FOUND (direct successor)!----using A*")
                 print(f"Generated nodes: {generated}")
                 print(f"Expanded nodes: {expanded}")
                 print(f"Path length: {len(path)}")

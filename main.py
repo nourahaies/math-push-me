@@ -1,14 +1,17 @@
 #main.py
 from solver_dfs import dfs_solve    
 from solver_astar import astar_solve
+from solver_bfs import bfs_solve
 from level_loader import load_level
 from game import Game
 from successor import get_successors
 
 
 if __name__ == "__main__":
-    #level = load_level("levels/level1.json")
-    level = load_level("levels/field5.json")
+    level = load_level("levels/level1.json")
+    #level = load_level("levels/field5.json")
+    #level = load_level("levels/level2.json")
+    ##level = load_level("levels/level3.json")
     game = Game(level)
 
     print("Math Push (Move with W/A/S/D, Q to quit, t to know possible states)\n")
@@ -61,7 +64,7 @@ if __name__ == "__main__":
                 print("No solution found within node limit.")
                 print("Generated nodes:", generated_count)
             else:
-                print("Goal found!")
+                print("Goal found!----using DFS")
                 print("Generated nodes:", generated_count)
                 print("Goal player position:", goal_snapshot["player_pos"])
                 print("Path length:", len(path))
@@ -81,5 +84,18 @@ if __name__ == "__main__":
                 print("Path length:", len(path))
                 print("Path actions:", path)
 
+        elif move == "b":
+            print("Running BFS solver... (this may take a while)")
+            
+            goal_snapshot, generated_count, path = bfs_solve(game, max_nodes=300000)
+            if goal_snapshot is None:
+                print("No solution found within node limit.")
+                print("Generated nodes:", generated_count)
+            else:
+                print("Goal found!")
+                print("Generated nodes:", generated_count)
+                print("Goal player position:", goal_snapshot.player_pos)
+                print("Path length:", len(path))
+                print("Path actions:", path)
 
         game.display()
