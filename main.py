@@ -118,7 +118,7 @@ Debug:
 
         # A*
         elif move == "h":
-            print("Running A* solver... (this may take a while)")
+            print("===Running A* solver... (this may take a while)===")
             goal_snapshot, generated_count, path = astar_solve(game, max_nodes=1000000)
 
             if goal_snapshot is None:

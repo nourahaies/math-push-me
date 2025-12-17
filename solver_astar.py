@@ -1,4 +1,3 @@
-# solver_astar.py
 from copy import deepcopy
 from state import GameState
 from successor import get_successors
@@ -55,14 +54,11 @@ def heuristic_estimate(grid, player_pos, locks_map):
     # إذا في أقفال باقيين → أعطي عقوبة ضخمة
     lock_penalty = 1000 * len(locks_map)
 
-    # أقرب هدف فرعي (رقم / عملية / قفل)
     nums_ops, locks_positions, goal_pos = _collect_interest_positions(grid)
     best = float('inf')
 
     for p in nums_ops:
         best = min(best, _manhattan(player_pos, p))
-    #for p in locks_positions:
-        #best = min(best, _manhattan(player_pos, p))
 
     if not locks_map and goal_pos:
         best = _manhattan(player_pos, goal_pos)
@@ -73,14 +69,13 @@ def heuristic_estimate(grid, player_pos, locks_map):
 def astar_solve(game, max_nodes=1000000, progress_interval=50000):
     """
     A* solver.
-    Returns (goal_snapshot, generated_nodes_count, path_actions) or (None, gen_count, None)
+    Returns (goal_snapshot, generated_nodes_count, path_actions)
     """
     start_time = time.time()
 
     root_state = deepcopy(game.state)
     root_results = deepcopy(game.results)
 
-    # nodes array holds node dicts so we can reconstruct path
     nodes = []
     root_node = {
         "state": root_state,
@@ -91,12 +86,10 @@ def astar_solve(game, max_nodes=1000000, progress_interval=50000):
     }
     nodes.append(root_node)
 
-    # priority queue holds (f, node_index)
     pq = []
     start_h = heuristic_estimate(root_state.grid, root_state.player_pos, root_state.locks)
     heapq.heappush(pq, (start_h, 0))
 
-    # visited map: signature -> best g found
     visited = {}
     sig_root = _state_signature(root_state.grid, root_state.player_pos, root_state.locks, root_results)
     visited[sig_root] = 0
@@ -104,30 +97,43 @@ def astar_solve(game, max_nodes=1000000, progress_interval=50000):
     generated = 1
     expanded = 0
 
-    print(f"\n=== A* START (limit={max_nodes}) ===")
-    print(f"Root pos={root_state.player_pos}  Locks={list(root_state.locks.keys())}\n")
+    # DEBUG PRINT (solver start)
+    # print(f"\n=== A* START (limit={max_nodes}) ===")
+    # print(f"Root pos={root_state.player_pos}  Locks={list(root_state.locks.keys())}\n")
+
     last_report = 0
 
     while pq:
         f, idx = heapq.heappop(pq)
         node = nodes[idx]
         g = node["g"]
-        # skip if this node is outdated (we might have inserted a better g for same signature)
-        cur_sig = _state_signature(node["state"].grid, node["state"].player_pos, node["state"].locks, node["results"])
+
+        cur_sig = _state_signature(
+            node["state"].grid,
+            node["state"].player_pos,
+            node["state"].locks,
+            node["results"]
+        )
         if visited.get(cur_sig, float('inf')) < g:
             continue
 
         expanded += 1
-        # progress printing
-        if expanded - last_report >= progress_interval:
-            elapsed = time.time() - start_time
-            print(f"--- Expanded {expanded} nodes (generated {generated}) ---")
-            print(f" Current node player={node['state'].player_pos}  locks_left={len(node['state'].locks)}  time={elapsed:.1f}s")
-            print("-----------------------------------------------------")
-            last_report = expanded
+
+        # DEBUG PRINT (progress report)
+        # if expanded - last_report >= progress_interval:
+        #     elapsed = time.time() - start_time
+        #     print(f"--- Expanded {expanded} nodes (generated {generated}) ---")
+        #     print(
+        #         f" Player={node['state'].player_pos} "
+        #         f"Locks left={len(node['state'].locks)} "
+        #         f"Time={elapsed:.1f}s"
+        #     )
+        #     print("-" * 55)
+        #     last_report = expanded
+
+        st = node["state"]
 
         # goal check
-        st = node["state"]
         if st.player_pos == st.goal_pos and not st.locks:
             goal_snapshot = {
                 "grid": deepcopy(st.grid),
@@ -136,13 +142,15 @@ def astar_solve(game, max_nodes=1000000, progress_interval=50000):
                 "results": list(node["results"])
             }
             path = _reconstruct_path(nodes, idx)
-            print("\n✔ GOAL FOUND!")
-            print(f"Generated nodes: {generated}")
-            print(f"Expanded nodes: {expanded}")
-            print(f"Path length: {len(path)}")
+
+            # DEBUG PRINT (goal found)
+            # print("\n✔ GOAL FOUND (A*)")
+            # print(f"Generated nodes: {generated}")
+            # print(f"Expanded nodes: {expanded}")
+            # print(f"Path length: {len(path)}")
+
             return goal_snapshot, generated, path
 
-        # generate successors using the helper (simulate on copies)
         class _MiniGame:
             def __init__(self, state, results):
                 self.state = state
@@ -158,24 +166,25 @@ def astar_solve(game, max_nodes=1000000, progress_interval=50000):
             results_s = s["results"]
             action_s = s["action"]
 
-            # compute g for successor (cost per move = 1)
             g_s = g + 1
-
             sig = _state_signature(grid_s, pos_s, locks_s, results_s)
+
             prev_g = visited.get(sig)
             if prev_g is not None and g_s >= prev_g:
-                # we already have an equal or better path to this signature
                 continue
 
-            # quick direct-successor goal check (if move reaches goal and locks cleared)
-            if (pos_s == st.goal_pos) and (not locks_s):
+            # DEBUG PRINT (direct successor goal)
+            # if pos_s == st.goal_pos and not locks_s:
+            #     print("Direct goal successor found")
+
+            if pos_s == st.goal_pos and not locks_s:
                 goal_snapshot = {
                     "grid": deepcopy(grid_s),
                     "player_pos": pos_s,
                     "locks": deepcopy(locks_s),
                     "results": list(results_s)
                 }
-                # create temp node to reconstruct path
+
                 temp = {
                     "state": None,
                     "results": deepcopy(results_s),
@@ -184,15 +193,10 @@ def astar_solve(game, max_nodes=1000000, progress_interval=50000):
                     "g": g_s
                 }
                 nodes.append(temp)
-                goal_index = len(nodes) - 1
-                path = _reconstruct_path(nodes, goal_index)
-                print("\n✔ GOAL FOUND (direct successor)!----using A*")
-                print(f"Generated nodes: {generated}")
-                print(f"Expanded nodes: {expanded}")
-                print(f"Path length: {len(path)}")
+                path = _reconstruct_path(nodes, len(nodes) - 1)
+
                 return goal_snapshot, generated + 1, path
 
-            # otherwise add new node
             level_data = {
                 "rows": len(grid_s),
                 "cols": len(grid_s[0]) if grid_s else 0,
@@ -202,27 +206,28 @@ def astar_solve(game, max_nodes=1000000, progress_interval=50000):
             gs.locks = deepcopy(locks_s)
             gs.player_pos = pos_s
 
-            new_node = {
+            nodes.append({
                 "state": gs,
                 "results": deepcopy(results_s),
                 "action_from_parent": action_s,
                 "parent": idx,
                 "g": g_s
-            }
-            nodes.append(new_node)
-            new_idx = len(nodes) - 1
+            })
 
-            # heuristic
             h = heuristic_estimate(grid_s, pos_s, locks_s)
-            f_new = g_s + h
+            heapq.heappush(pq, (g_s + h, len(nodes) - 1))
 
-            heapq.heappush(pq, (f_new, new_idx))
             visited[sig] = g_s
             generated += 1
 
-            if max_nodes and generated >= max_nodes:
-                print("\n✖ Node limit reached! No solution found.")
+            # DEBUG PRINT (node limit)
+            # if generated >= max_nodes:
+            #     print("Node limit reached")
+
+            if generated >= max_nodes:
                 return None, generated, None
 
-    print("\n✖ A* ended. No solution found.")
+    # DEBUG PRINT (search exhausted)
+    # print("A* finished with no solution")
+
     return None, generated, None
