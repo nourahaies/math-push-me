@@ -22,8 +22,8 @@ class MathPushGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Math Push Game")
-        self.root.geometry("1000x800")
-        self.root.minsize(900, 700)
+        self.root.geometry("1100x900")
+        self.root.minsize(1000, 800)
         self.root.resizable(True, True)
         self.game_won = False  # Track if game is won
         self.last_direction = "up"  # Track last movement direction for player orientation
@@ -124,8 +124,8 @@ class MathPushGUI:
         
         self.canvas = tk.Canvas(
             canvas_frame, 
-            width=350, 
-            height=350, 
+            width=500, 
+            height=500, 
             bg="white", 
             highlightthickness=2, 
             highlightbackground="black"
@@ -205,8 +205,8 @@ class MathPushGUI:
             
             # If canvas dimensions are not yet available, use configured size
             if canvas_width <= 1 or canvas_height <= 1:
-                canvas_width = 350
-                canvas_height = 350
+                canvas_width = 500
+                canvas_height = 500
             
             # Cell size calculation
             rows = self.game.state.rows
