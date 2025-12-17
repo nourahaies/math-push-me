@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, scrolledtext
 import sys
 import traceback
 import os
@@ -8,6 +8,11 @@ import glob
 try:
     from level_loader import load_level
     from game import Game
+    # Import solvers
+    from solver_dfs import dfs_solve
+    from solver_bfs import bfs_solve
+    from solver_astar import astar_solve
+    from solver_ucs import ucs_solve
 except ImportError as e:
     print(f"Import error: {e}")
     sys.exit(1)
@@ -17,8 +22,9 @@ class MathPushGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Math Push Game")
-        self.root.geometry("600x700")
-        self.root.resizable(False, False)
+        self.root.geometry("1000x800")
+        self.root.minsize(900, 700)
+        self.root.resizable(True, True)
         self.game_won = False  # Track if game is won
         self.last_direction = "up"  # Track last movement direction for player orientation
         
@@ -43,20 +49,24 @@ class MathPushGUI:
             sys.exit(1)
 
     def create_widgets(self):
+        # Create main container
+        main_container = tk.Frame(self.root)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
         # Title
-        title_label = tk.Label(self.root, text="Math Push Game", font=("Arial", 20, "bold"))
+        title_label = tk.Label(main_container, text="Math Push Game", font=("Arial", 20, "bold"))
         title_label.pack(pady=10)
         
         # Instructions
         instructions = tk.Label(
-            self.root, 
+            main_container, 
             text="Use WASD keys to move. U to undo. R to reset. Q to quit.",
             font=("Arial", 10)
         )
         instructions.pack(pady=5)
         
         # Level selector with improved styling
-        level_frame = tk.Frame(self.root, bg="#f0f0f0", padx=10, pady=5)
+        level_frame = tk.Frame(main_container, bg="#f0f0f0", padx=10, pady=5)
         level_frame.pack(pady=5)
         
         tk.Label(level_frame, text="Select Level:", font=("Arial", 12, "bold"), bg="#f0f0f0").pack(side=tk.LEFT)
@@ -100,16 +110,63 @@ class MathPushGUI:
             fg="black"
         )
         
+        # Create a frame for the game area
+        game_frame = tk.Frame(main_container)
+        game_frame.pack(pady=10, fill=tk.BOTH, expand=True)
+        
+        # Left side - Game canvas and controls
+        left_frame = tk.Frame(game_frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
         # Game canvas
+        canvas_frame = tk.Frame(left_frame)
+        canvas_frame.pack(pady=10)
+        
         self.canvas = tk.Canvas(
-            self.root, 
-            width=500, 
-            height=500, 
+            canvas_frame, 
+            width=350, 
+            height=350, 
             bg="white", 
             highlightthickness=2, 
             highlightbackground="black"
         )
-        self.canvas.pack(pady=10)
+        self.canvas.pack()
+        
+        # Control buttons
+        button_frame = tk.Frame(left_frame)
+        button_frame.pack(pady=10)
+        
+        tk.Button(button_frame, text="↑", command=lambda: self.move("up"), width=5, height=2).grid(row=0, column=1, padx=5)
+        tk.Button(button_frame, text="←", command=lambda: self.move("left"), width=5, height=2).grid(row=1, column=0, padx=5)
+        tk.Button(button_frame, text="↓", command=lambda: self.move("down"), width=5, height=2).grid(row=1, column=1, padx=5)
+        tk.Button(button_frame, text="→", command=lambda: self.move("right"), width=5, height=2).grid(row=1, column=2, padx=5)
+        
+        tk.Button(button_frame, text="Undo (U)", command=self.undo_move, width=10).grid(row=0, column=3, padx=5)
+        tk.Button(button_frame, text="Reset (R)", command=self.reset_game, width=10).grid(row=1, column=3, padx=5)
+        
+        # Right side - Solvers and results
+        right_frame = tk.Frame(game_frame)
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(20, 0))
+        
+        # Solver buttons
+        solver_frame = tk.LabelFrame(right_frame, text="Solvers", font=("Arial", 12, "bold"), padx=10, pady=10)
+        solver_frame.pack(pady=10, fill=tk.X)
+        
+        # Frame for solver buttons
+        buttons_frame = tk.Frame(solver_frame)
+        buttons_frame.pack()
+        
+        tk.Button(buttons_frame, text="DFS", command=self.run_dfs, width=10, height=2, bg="lightblue", font=("Arial", 9, "bold")).grid(row=0, column=0, padx=5)
+        tk.Button(buttons_frame, text="BFS", command=self.run_bfs, width=10, height=2, bg="lightgreen", font=("Arial", 9, "bold")).grid(row=0, column=1, padx=5)
+        tk.Button(buttons_frame, text="A*", command=self.run_astar, width=10, height=2, bg="lightyellow", font=("Arial", 9, "bold")).grid(row=0, column=2, padx=5)
+        tk.Button(buttons_frame, text="UCS", command=self.run_ucs, width=10, height=2, bg="lightcoral", font=("Arial", 9, "bold")).grid(row=0, column=3, padx=5)
+        
+        # Results display area
+        results_frame = tk.LabelFrame(right_frame, text="Solver Results", font=("Arial", 12, "bold"), padx=10, pady=10)
+        results_frame.pack(pady=10, fill=tk.BOTH, expand=True)
+        
+        self.results_text = scrolledtext.ScrolledText(results_frame, width=50, height=15, wrap=tk.WORD)
+        self.results_text.pack(pady=5, fill=tk.BOTH, expand=True)
         
         # Status bar
         self.status_var = tk.StringVar(value="Use WASD to move")
@@ -121,18 +178,6 @@ class MathPushGUI:
             anchor=tk.W
         )
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        # Control buttons
-        button_frame = tk.Frame(self.root)
-        button_frame.pack(pady=10)
-        
-        tk.Button(button_frame, text="↑", command=lambda: self.move("up"), width=5, height=2).grid(row=0, column=1, padx=5)
-        tk.Button(button_frame, text="←", command=lambda: self.move("left"), width=5, height=2).grid(row=1, column=0, padx=5)
-        tk.Button(button_frame, text="↓", command=lambda: self.move("down"), width=5, height=2).grid(row=1, column=1, padx=5)
-        tk.Button(button_frame, text="→", command=lambda: self.move("right"), width=5, height=2).grid(row=1, column=2, padx=5)
-        
-        tk.Button(button_frame, text="Undo (U)", command=self.undo_move, width=10).grid(row=0, column=3, padx=5)
-        tk.Button(button_frame, text="Reset (R)", command=self.reset_game, width=10).grid(row=1, column=3, padx=5)
 
     def change_level(self, level_name):
         """Change the current level"""
@@ -154,12 +199,21 @@ class MathPushGUI:
         self.canvas.delete("all")
         
         try:
+            # Get actual canvas dimensions
+            canvas_width = self.canvas.winfo_width()
+            canvas_height = self.canvas.winfo_height()
+            
+            # If canvas dimensions are not yet available, use configured size
+            if canvas_width <= 1 or canvas_height <= 1:
+                canvas_width = 350
+                canvas_height = 350
+            
             # Cell size calculation
             rows = self.game.state.rows
             cols = self.game.state.cols
-            cell_size = min(500 // cols, 500 // rows)
-            offset_x = (500 - cols * cell_size) // 2
-            offset_y = (500 - rows * cell_size) // 2
+            cell_size = min(canvas_width // cols, canvas_height // rows)
+            offset_x = (canvas_width - cols * cell_size) // 2
+            offset_y = (canvas_height - rows * cell_size) // 2
             
             # Draw grid
             for r in range(rows):
@@ -350,6 +404,62 @@ class MathPushGUI:
         
         # Draw the triangle
         self.canvas.create_polygon(points, fill="white", outline="black", width=2)
+
+    def run_solver(self, solver_func, solver_name):
+        """Run a solver and display results"""
+        try:
+            self.results_text.insert(tk.END, f"Running {solver_name} solver...\n")
+            self.results_text.see(tk.END)
+            self.root.update_idletasks()
+            
+            # Run the solver (matching the way it's called in main.py)
+            goal_snapshot, generated_count, path = solver_func(self.game)
+            
+            # Display results
+            self.results_text.insert(tk.END, f"\n{solver_name} Results:\n")
+            self.results_text.insert(tk.END, f"Generated nodes: {generated_count}\n")
+            
+            if goal_snapshot is None:
+                self.results_text.insert(tk.END, "No solution found within node limit.\n")
+            else:
+                self.results_text.insert(tk.END, f"Solution found!\n")
+                self.results_text.insert(tk.END, f"Path length: {len(path)}\n")
+                # Limit path display to first 20 moves to avoid overwhelming the display
+                if len(path) > 20:
+                    self.results_text.insert(tk.END, f"Path (first 20 moves): {path[:20]}...\n")
+                else:
+                    self.results_text.insert(tk.END, f"Path: {path}\n")
+            
+            self.results_text.insert(tk.END, "-" * 50 + "\n")
+            self.results_text.see(tk.END)
+            self.root.update_idletasks()  # Ensure the text is displayed immediately
+        except Exception as e:
+            error_msg = f"Error running {solver_name}: {str(e)}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()  # Print full traceback for debugging
+            self.results_text.insert(tk.END, error_msg + "\n")
+            self.results_text.see(tk.END)
+
+    def run_dfs(self):
+        """Run DFS solver"""
+        print("DFS button clicked")  # Debug print
+        self.run_solver(dfs_solve, "DFS")
+
+    def run_bfs(self):
+        """Run BFS solver"""
+        print("BFS button clicked")  # Debug print
+        self.run_solver(bfs_solve, "BFS")
+
+    def run_astar(self):
+        """Run A* solver"""
+        print("A* button clicked")  # Debug print
+        self.run_solver(astar_solve, "A*")
+
+    def run_ucs(self):
+        """Run UCS solver"""
+        print("UCS button clicked")  # Debug print
+        self.run_solver(ucs_solve, "UCS")
 
 
 def main():

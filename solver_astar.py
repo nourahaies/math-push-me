@@ -61,8 +61,8 @@ def heuristic_estimate(grid, player_pos, locks_map):
 
     for p in nums_ops:
         best = min(best, _manhattan(player_pos, p))
-    for p in locks_positions:
-        best = min(best, _manhattan(player_pos, p))
+    #for p in locks_positions:
+        #best = min(best, _manhattan(player_pos, p))
 
     if not locks_map and goal_pos:
         best = _manhattan(player_pos, goal_pos)
