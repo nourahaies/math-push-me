@@ -3,6 +3,8 @@ from solver_dfs import dfs_solve
 from solver_astar import astar_solve
 from solver_bfs import bfs_solve
 from solver_ucs import ucs_solve
+from solver_hill_climbing import hill_climbing_solve
+
 
 from level_loader import load_level
 from game import Game
@@ -12,9 +14,9 @@ from successor import get_successors
 if __name__ == "__main__":
     # اختيار المرحلة
     
-    #level = load_level("levels/level1.json")
+    level = load_level("levels/level1.json")
     #level = load_level("levels/field5.json")
-    level = load_level("levels/level2.json")
+    #level = load_level("levels/level2.json")
     
     ##level = load_level("levels/level3.json")
 
@@ -34,6 +36,7 @@ Search / Solvers:
   B              → Run BFS solver
   H              → Run A* solver
   C              → Run Uniform Cost Search (UCS)
+  L              → Run Hill Climbing          
 
 Debug:
   T              → Show all possible successor states
@@ -142,6 +145,22 @@ Debug:
             else:
                 print("Goal found! ---- using UCS")
                 print("Generated nodes:", generated_count)
+                print("Goal player position:", goal_snapshot["player_pos"])
+                print("Path length:", len(path))
+                print("Path actions:", path)
+
+                # Hill Climbing
+        elif move == "l":
+            print("Running Hill Climbing solver...")
+
+            goal_snapshot, steps, path = hill_climbing_solve(game, max_steps=500)
+
+            if goal_snapshot is None:
+                print("Hill Climbing failed (stuck at local optimum).")
+                print("Steps taken:", steps)
+            else:
+                print("Goal found! ---- using Hill Climbing")
+                print("Steps taken:", steps)
                 print("Goal player position:", goal_snapshot["player_pos"])
                 print("Path length:", len(path))
                 print("Path actions:", path)
