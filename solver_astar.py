@@ -51,7 +51,7 @@ def _collect_interest_positions(grid):
     return nums_ops, locks, goal
 
 def heuristic_estimate(grid, player_pos, locks_map):
-    # إذا في أقفال باقيين → أعطي عقوبة ضخمة
+    
     lock_penalty = 1000 * len(locks_map)
 
     nums_ops, locks_positions, goal_pos = _collect_interest_positions(grid)
@@ -101,7 +101,7 @@ def astar_solve(game, max_nodes=1000000, progress_interval=50000):
     # print(f"\n=== A* START (limit={max_nodes}) ===")
     # print(f"Root pos={root_state.player_pos}  Locks={list(root_state.locks.keys())}\n")
 
-    last_report = 0
+    ###last_report = 0
 
     while pq:
         f, idx = heapq.heappop(pq)

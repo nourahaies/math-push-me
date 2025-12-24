@@ -13,8 +13,8 @@ if __name__ == "__main__":
     # اختيار المرحلة
     
     #level = load_level("levels/level1.json")
-    level = load_level("levels/field5.json")
-    #level = load_level("levels/level2.json")
+    #level = load_level("levels/field5.json")
+    level = load_level("levels/level2.json")
     
     ##level = load_level("levels/level3.json")
 

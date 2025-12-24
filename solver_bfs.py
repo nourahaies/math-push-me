@@ -24,7 +24,9 @@ def reconstruct_path(nodes, goal_idx):
 
 
 def bfs_solve(game, max_nodes=300000):
-    print("\n=== BFS START ===")
+
+    # DEBUG PRINT — BFS start
+    # print("\n=== BFS START ===")
 
     root_state = deepcopy(game.state)
     root_results = deepcopy(game.results)
@@ -58,21 +60,25 @@ def bfs_solve(game, max_nodes=300000):
         state = node["state"]
         results = node["results"]
 
-        print(
-            f"\n----- Expanded node {idx} (step {expanded}) -----\n"
-            f"Player pos: {state.player_pos}\n"
-            f"Remaining locks: {list(state.locks.keys())}\n"
-            f"Results: {results}\n"
-            f"---------------------------------------------"
-        )
+        # DEBUG PRINT — node expansion info
+        # print(
+        #     f"\n----- Expanded node {idx} (step {expanded}) -----\n"
+        #     f"Player pos: {state.player_pos}\n"
+        #     f"Remaining locks: {list(state.locks.keys())}\n"
+        #     f"Results: {results}\n"
+        #     f"---------------------------------------------"
+        # )
 
         # 🎯 Goal check
         if state.player_pos == state.goal_pos and not state.locks:
             path = reconstruct_path(nodes, idx)
-            print("\n✔ GOAL FOUND!----using BFS")
-            print(f"Expanded nodes: {expanded}")
-            print(f"Generated nodes: {generated}")
-            print(f"Path length: {len(path)}")
+
+            # DEBUG PRINT — goal found
+            # print("\n✔ GOAL FOUND!----using BFS")
+            # print(f"Expanded nodes: {expanded}")
+            # print(f"Generated nodes: {generated}")
+            # print(f"Path length: {len(path)}")
+
             return state, generated, path
 
         # Mini game for successors
@@ -89,7 +95,8 @@ def bfs_solve(game, max_nodes=300000):
             new_pos = s["player_pos"]
             new_locks = s["locks"]
 
-            print(f" Trying action: {action} → moves to {new_pos}")
+            # DEBUG PRINT — trying action
+            # print(f" Trying action: {action} → moves to {new_pos}")
 
             sig = state_signature(
                 s["grid"],
@@ -99,11 +106,14 @@ def bfs_solve(game, max_nodes=300000):
             )
 
             if sig in visited:
-                print("   ⤷ Skipped (already visited)")
+                # DEBUG PRINT — visited state skipped
+                # print("   ⤷ Skipped (already visited)")
                 continue
 
             if len(new_locks) < len(state.locks):
-                print("   🔓 Lock opened!")
+                # DEBUG PRINT — lock opened
+                # print("   🔓 Lock opened!")
+                pass
 
             level_data = {
                 "rows": len(s["grid"]),
@@ -114,8 +124,7 @@ def bfs_solve(game, max_nodes=300000):
             new_state = GameState(level_data)
             new_state.player_pos = new_pos
             new_state.locks = deepcopy(new_locks)
-            new_state.goal_pos = state.goal_pos   # ⭐⭐ هذا السطر المهم
-
+            new_state.goal_pos = state.goal_pos
 
             nodes.append({
                 "state": new_state,
@@ -128,15 +137,18 @@ def bfs_solve(game, max_nodes=300000):
             visited.add(sig)
             generated += 1
 
-            print(f"   ✓ Added new node. Player at {new_pos}, locks_left={len(new_locks)}")
+            # DEBUG PRINT — new node added
+            # print(f"   ✓ Added new node. Player at {new_pos}, locks_left={len(new_locks)}")
 
             if generated >= max_nodes:
-                print("\n✖ Node limit reached!")
+                # DEBUG PRINT — node limit reached
+                # print("\n✖ Node limit reached!")
                 return None, generated, None
 
-    print("\n✖ BFS ended. No solution found.")
-    print(f"Expanded nodes: {expanded}")
-    print(f"Generated nodes: {generated}")
+    # DEBUG PRINT — BFS exhausted
+    # print("\n✖ BFS ended. No solution found.")
+    # print(f"Expanded nodes: {expanded}")
+    # print(f"Generated nodes: {generated}")
 
     goal_snapshot = {
         "grid": deepcopy(state.grid),
@@ -144,6 +156,4 @@ def bfs_solve(game, max_nodes=300000):
         "locks": deepcopy(state.locks),
         "results": list(results)
     }
-    return goal_snapshot, generated, path
-
-
+    return goal_snapshot, generated, None

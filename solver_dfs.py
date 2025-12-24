@@ -44,13 +44,19 @@ def dfs_solve(game, max_nodes=100000):
     visited = set()
 
     visited.add(
-        _state_signature(root_state.grid, root_state.player_pos, root_state.locks, root_results)
+        _state_signature(
+            root_state.grid,
+            root_state.player_pos,
+            root_state.locks,
+            root_results
+        )
     )
 
     generated = 1
 
-    print(f"\n=== DFS START (limit={max_nodes}) ===")
-    print(f"Root position = {root_state.player_pos}   Locks={list(root_state.locks.keys())}\n")
+    # DEBUG PRINT — DFS start info
+    # print(f"\n=== DFS START (limit={max_nodes}) ===")
+    # print(f"Root position = {root_state.player_pos}   Locks={list(root_state.locks.keys())}\n")
 
     step_counter = 0
 
@@ -62,10 +68,12 @@ def dfs_solve(game, max_nodes=100000):
         cur_results = node["results"]
 
         step_counter += 1
-        print(f"\n----- Node {current_idx} expanded (Step {step_counter}) -----")
-        print(f"Player pos: {cur_state.player_pos}")
-        print(f"Remaining locks: {cur_state.locks}")
-        print("---------------------------------------------")
+
+        # DEBUG PRINT — node expansion
+        # print(f"\n----- Node {current_idx} expanded (Step {step_counter}) -----")
+        # print(f"Player pos: {cur_state.player_pos}")
+        # print(f"Remaining locks: {cur_state.locks}")
+        # print("---------------------------------------------")
 
         # Goal check
         if cur_state.player_pos == cur_state.goal_pos and not cur_state.locks:
@@ -77,10 +85,12 @@ def dfs_solve(game, max_nodes=100000):
             }
             path = _reconstruct_path(nodes, current_idx)
 
-            print("\n✔ GOAL FOUND!")
-            print(f"Generated nodes: {generated}")
-            print(f"Path length: {len(path)}")
-            print("Path =", path)
+            # DEBUG PRINT — goal found
+            # print("\n✔ GOAL FOUND!")
+            # print(f"Generated nodes: {generated}")
+            # print(f"Path length: {len(path)}")
+            # print("Path =", path)
+
             return goal_snapshot, generated, path
 
         # Successors
@@ -99,17 +109,20 @@ def dfs_solve(game, max_nodes=100000):
             results_s = s["results"]
             action_s = s["action"]
 
-            print(f" Trying action: {action_s} → moves to {pos_s}")
+            # DEBUG PRINT — trying action
+            # print(f" Trying action: {action_s} → moves to {pos_s}")
 
             sig = _state_signature(grid_s, pos_s, locks_s, results_s)
 
             if sig in visited:
-                print("   ⤷ Skipped (already visited)")
+                # DEBUG PRINT — visited state skipped
+                # print("   ⤷ Skipped (already visited)")
                 continue
 
             # Quick goal check
             if pos_s == cur_state.goal_pos and not locks_s:
-                print(f"   ✔ Direct goal reached via {action_s}")
+                # DEBUG PRINT — direct goal
+                # print(f"   ✔ Direct goal reached via {action_s}")
 
                 goal_snapshot = {
                     "grid": deepcopy(grid_s),
@@ -129,11 +142,14 @@ def dfs_solve(game, max_nodes=100000):
 
                 path = _reconstruct_path(nodes, goal_index)
 
-                print("   ✔ Path =", path)
+                # DEBUG PRINT — direct path
+                # print("   ✔ Path =", path)
+
                 return goal_snapshot, generated + 1, path
 
             # Normal expansion
-            print(f"   ✓ Added new node. Player at {pos_s}, Locks={locks_s}")
+            # DEBUG PRINT — node added
+            # print(f"   ✓ Added new node. Player at {pos_s}, Locks={locks_s}")
 
             level_data = {
                 "rows": len(grid_s),
@@ -159,8 +175,10 @@ def dfs_solve(game, max_nodes=100000):
             generated += 1
 
             if generated >= max_nodes:
-                print("\n✖ Node limit reached! No solution found.")
+                # DEBUG PRINT — node limit reached
+                # print("\n✖ Node limit reached! No solution found.")
                 return None, generated, None
 
-    print("\n✖ DFS ended. No solution found.")
+    # DEBUG PRINT — DFS exhausted
+    # print("\n✖ DFS ended. No solution found.")
     return None, generated, None
