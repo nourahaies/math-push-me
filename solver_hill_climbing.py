@@ -2,148 +2,97 @@ from copy import deepcopy
 from state import GameState
 from successor import get_successors
 
+# دالة البصمة لضمان عدم التكرار (من كود الـ DFS السابق)
+def _state_signature(grid, player_pos, locks, results):
+    frozen_grid = tuple(tuple(row) for row in grid)
+    frozen_locks = tuple(sorted(((k, v[0], v[1]) for k, v in locks.items())))
+    frozen_results = tuple(sorted(results))
+    return (player_pos, frozen_grid, frozen_locks, frozen_results)
 
 def manhattan(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-
-def heuristic(grid, player_pos, locks, goal_pos):
-    """
-    Heuristic محسّن لـ Hill Climbing:
-    - عقوبة معتدلة على الأقفال
-    - جذب للأرقام والعمليات
-    - جذب ناعم للهدف حتى لو القفل موجود
-    """
-
-    # 1️⃣ عقوبة الأقفال (خففناها)
-    lock_penalty = 200 * len(locks)
-
-    # 2️⃣ أقرب رقم أو عملية
-    targets = []
-
-    for r in range(len(grid)):
-        for c in range(len(grid[0])):
-            cell = grid[r][c]
-            if cell is None:
-                continue
-            if cell.isdigit() or cell in ["+", "-"]:
-                targets.append((r, c))
-
-    interest_dist = float("inf")
-    for t in targets:
-        interest_dist = min(interest_dist, manhattan(player_pos, t))
-
-    if interest_dist == float("inf"):
-        interest_dist = 0
-
-    # 3️⃣ جذب ناعم للهدف (حتى لو القفل موجود)
+def heuristic(grid, player_pos, locks, goal_pos, initial_locks_count):
+    # 1️⃣ عقوبة الأقفال
+    lock_penalty = 100 * len(locks)
+    
+    # 2️⃣ مكافأة فتح الأقفال (منطق رفيقتك)
+    unlocked_bonus = (initial_locks_count - len(locks)) * 50
+    
+    # 3️⃣ المسافة للهدف
     goal_dist = manhattan(player_pos, goal_pos)
-    goal_pull = 0.5 * goal_dist
+    
+    # القيمة النهائية (كلما صغرت كان أفضل)
+    return lock_penalty + goal_dist - unlocked_bonus
 
-    #return lock_penalty + interest_dist + goal_pull
-    return lock_penalty + goal_pull
-
-
-def hill_climbing_solve(game, max_steps=500):
+def hill_climbing_solve(game, max_steps=100000):
     """
-    Deterministic Hill Climbing (Best Neighbor)
+    Modified Hill Climbing (Best-First Logic) 
+    بمنطق رفيقتك: استخدام قائمة (Frontier) لتجنب القمم المحلية
     """
+    root_state = deepcopy(game.state)
+    root_results = deepcopy(game.results)
+    initial_locks_count = len(root_state.locks)
 
-    current_state = deepcopy(game.state)
-    current_results = deepcopy(game.results)
-    path = []
+    # الأرشيف والقائمة (Frontier)
+    nodes = []
+    root_h = heuristic(root_state.grid, root_state.player_pos, root_state.locks, root_state.goal_pos, initial_locks_count)
+    
+    # نضع: (الهرستك، الحالة، النتائج، الطريق، الأب)
+    frontier = [(root_h, root_state, root_results, [])]
+    visited = set()
+    
+    generated = 0
 
-    current_h = heuristic(
-        current_state.grid,
-        current_state.player_pos,
-        current_state.locks,
-        current_state.goal_pos
-    )
+    print("\n=== ENHANCED HILL CLIMBING START ===")
 
-    # --- [PRINT - MONITOR] ---
-    print("\n=== HILL CLIMBING START ===")
-    print(f"Start pos={current_state.player_pos}  Locks={list(current_state.locks.keys())}")
-    print(f"Initial heuristic = {current_h}")
-    # -------------------------
+    while frontier:
+        # فرز القائمة لاختيار أفضل عقدة (مثل كود رفيقتك)
+        frontier.sort(key=lambda x: x[0])
+        current_h, cur_state, cur_results, path = frontier.pop(0)
 
-    for step in range(max_steps):
+        # بصمة الحالة لمنع الحلقات
+        sig = _state_signature(cur_state.grid, cur_state.player_pos, cur_state.locks, cur_results)
+        if sig in visited:
+            continue
+        visited.add(sig)
 
-        # --- [PRINT - MONITOR] ---
-        print(f"\n--- Step {step} ---")
-        print(f"Current pos={current_state.player_pos}  h={current_h}")
-        # -------------------------
-
-        # 🎯 Goal check
-        if current_state.player_pos == current_state.goal_pos and not current_state.locks:
+        # 🎯 فحص الهدف
+        if cur_state.player_pos == cur_state.goal_pos and not cur_state.locks:
             goal_snapshot = {
-                "grid": deepcopy(current_state.grid),
-                "player_pos": current_state.player_pos,
-                "locks": deepcopy(current_state.locks),
-                "results": list(current_results)
+                "grid": deepcopy(cur_state.grid),
+                "player_pos": cur_state.player_pos,
+                "locks": deepcopy(cur_state.locks),
+                "results": list(cur_results)
             }
-
-            # --- [PRINT - MONITOR] ---
-            print("✔ GOAL FOUND using Hill Climbing")
-            print("Path:", path)
-            # -------------------------
-
+            print(f"✔ GOAL FOUND! States explored: {len(visited)}")
             return goal_snapshot, len(path), path
 
-        # Generate successors
+        # استكشاف الجيران
         class MiniGame:
             def __init__(self, s, r):
                 self.state = s
                 self.results = r
 
-        mg = MiniGame(deepcopy(current_state), deepcopy(current_results))
+        mg = MiniGame(deepcopy(cur_state), deepcopy(cur_results))
         successors = get_successors(mg)
 
-        best_succ = None
-        best_h = current_h
-
         for s in successors:
-            h = heuristic(
-                s["grid"],
-                s["player_pos"],
-                s["locks"],
-                current_state.goal_pos
-            )
+            h = heuristic(s["grid"], s["player_pos"], s["locks"], cur_state.goal_pos, initial_locks_count)
+            
+            # إنشاء كائن الحالة الجديد
+            level_data = {"rows": len(s["grid"]), "cols": len(s["grid"][0]), "grid": deepcopy(s["grid"])}
+            new_gs = GameState(level_data)
+            new_gs.player_pos = s["player_pos"]
+            new_gs.locks = deepcopy(s["locks"])
+            new_gs.goal_pos = cur_state.goal_pos
+            
+            # إضافة الجار للقائمة (Frontier)
+            frontier.append((h, new_gs, s["results"], path + [s["action"]]))
+            generated += 1
 
-            # --- [PRINT - MONITOR] ---
-            print(f" Action {s['action']} → pos={s['player_pos']} h={h}")
-            # -------------------------
+        if len(visited) > max_steps:
+            break
 
-            if h < best_h:
-                best_h = h
-                best_succ = s
-
-        # ❌ No improvement → local optimum
-        if best_succ is None:
-            # --- [PRINT - MONITOR] ---
-            print("✖ Stuck at local optimum. No better neighbor.")
-            # -------------------------
-            return None, len(path), None
-
-        # Move to best neighbor
-        path.append(best_succ["action"])
-
-        level_data = {
-            "rows": len(best_succ["grid"]),
-            "cols": len(best_succ["grid"][0]),
-            "grid": deepcopy(best_succ["grid"])
-        }
-
-        new_state = GameState(level_data)
-        new_state.player_pos = best_succ["player_pos"]
-        new_state.locks = deepcopy(best_succ["locks"])
-        new_state.goal_pos = current_state.goal_pos
-
-        current_state = new_state
-        current_results = deepcopy(best_succ["results"])
-        current_h = best_h
-
-    # --- [PRINT - MONITOR] ---
-    print("✖ Step limit reached. Hill Climbing stopped.")
-    # -------------------------
-
-    return None, len(path), None
+    print("✖ No solution found or limit reached.")
+    return None, 0, None
