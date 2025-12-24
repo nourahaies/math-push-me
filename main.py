@@ -15,8 +15,9 @@ if __name__ == "__main__":
     # اختيار المرحلة
     
     #level = load_level("levels/level1.json")
-    #level = load_level("levels/field5.json")
-    level = load_level("levels/level2.json")
+
+    level = load_level("levels/field5.json")
+    #level = load_level("levels/level2.json")
     
     ##level = load_level("levels/level3.json")
 
@@ -153,7 +154,7 @@ Debug:
         elif move == "l":
             print("Running Hill Climbing solver...")
 
-            goal_snapshot, steps, path = hill_climbing_solve(game, max_steps=100000)
+            goal_snapshot, steps, path = hill_climbing_solve(game, max_nodes=300000)
 
             if goal_snapshot is None:
                 print("Hill Climbing failed (stuck at local optimum).")

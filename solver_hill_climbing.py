@@ -1,98 +1,97 @@
+import heapq
 from copy import deepcopy
 from state import GameState
 from successor import get_successors
 
-# دالة البصمة لضمان عدم التكرار (من كود الـ DFS السابق)
-def _state_signature(grid, player_pos, locks, results):
-    frozen_grid = tuple(tuple(row) for row in grid)
-    frozen_locks = tuple(sorted(((k, v[0], v[1]) for k, v in locks.items())))
-    frozen_results = tuple(sorted(results))
-    return (player_pos, frozen_grid, frozen_locks, frozen_results)
-
 def manhattan(a, b):
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-def heuristic(grid, player_pos, locks, goal_pos, initial_locks_count):
-    # 1️⃣ عقوبة الأقفال
-    lock_penalty = 100 * len(locks)
-    
-    # 2️⃣ مكافأة فتح الأقفال (منطق رفيقتك)
-    unlocked_bonus = (initial_locks_count - len(locks)) * 50
-    
-    # 3️⃣ المسافة للهدف
-    goal_dist = manhattan(player_pos, goal_pos)
-    
-    # القيمة النهائية (كلما صغرت كان أفضل)
-    return lock_penalty + goal_dist - unlocked_bonus
+def heuristic(grid, player_pos, locks, goal_pos, results):
+    # 1. إذا الأقفال صفر، الهدف هو وجهتنا الوحيدة
+    if not locks:
+        return manhattan(player_pos, goal_pos)
 
-def hill_climbing_solve(game, max_steps=100000):
-    """
-    Modified Hill Climbing (Best-First Logic) 
-    بمنطق رفيقتك: استخدام قائمة (Frontier) لتجنب القمم المحلية
-    """
-    root_state = deepcopy(game.state)
-    root_results = deepcopy(game.results)
-    initial_locks_count = len(root_state.locks)
+    # 2. البحث عن كل الأهداف الممكنة (أرقام، عمليات، أقفال)
+    tools = []
 
-    # الأرشيف والقائمة (Frontier)
-    nodes = []
-    root_h = heuristic(root_state.grid, root_state.player_pos, root_state.locks, root_state.goal_pos, initial_locks_count)
+    for r in range(len(grid)):
+        for c in range(len(grid[0])):
+            cell = grid[r][c]
+            if not cell: continue
+            
+            # أرقام وعمليات
+            if cell.isdigit() or cell in ['+', '-']:
+                tools.append((r, c))
+            
+    # 3. حساب المسافات
+    dist_to_tools = min([manhattan(player_pos, t) for t in tools]) if tools else 0
     
-    # نضع: (الهرستك، الحالة، النتائج، الطريق، الأب)
-    frontier = [(root_h, root_state, root_results, [])]
-    visited = set()
+    # 4. المعادلة الموزونة (The Golden Formula)
+    # هاد الترتيب بيخلي اللاعب يفضل الأقفال، بس ما ينسى الأرقام
+    h = (len(locks) * 10000)      # أهم شيء: عدد الأقفال المتبقية
+    h += (dist_to_tools * 10)     # ثاني أهم شيء: القرب من الأرقام عشان يجمع "ذخيرة"
     
-    generated = 0
+    return h
 
-    print("\n=== ENHANCED HILL CLIMBING START ===")
+def hill_climbing_solve(game, max_nodes=300000):
+    root_state = game.state
+    root_results = game.results
+    
+    # ✅ تم إضافة root_results هنا
+    start_h = heuristic(root_state.grid, root_state.player_pos, root_state.locks, root_state.goal_pos, root_results)
+    
+    frontier = []
+    counter = 0
+    heapq.heappush(frontier, (start_h, counter, root_state, root_results, []))
+    
+    visited = {} 
+    
+    print("\n=== FINAL EMERGENCY RECOVERY START ===")
 
     while frontier:
-        # فرز القائمة لاختيار أفضل عقدة (مثل كود رفيقتك)
-        frontier.sort(key=lambda x: x[0])
-        current_h, cur_state, cur_results, path = frontier.pop(0)
+        h, _, cur_state, cur_results, path = heapq.heappop(frontier)
 
-        # بصمة الحالة لمنع الحلقات
-        sig = _state_signature(cur_state.grid, cur_state.player_pos, cur_state.locks, cur_results)
-        if sig in visited:
+        sig = (cur_state.player_pos, 
+               tuple(tuple(row) for row in cur_state.grid), 
+               tuple(sorted(cur_state.locks.keys())),
+               tuple(sorted(cur_results)))
+
+        if sig in visited and visited[sig] <= h:
             continue
-        visited.add(sig)
+        visited[sig] = h
 
-        # 🎯 فحص الهدف
         if cur_state.player_pos == cur_state.goal_pos and not cur_state.locks:
+            print(f"✔ SUCCESS! Goal reached in {len(path)} moves.")
             goal_snapshot = {
-                "grid": deepcopy(cur_state.grid),
+                "grid": cur_state.grid,
                 "player_pos": cur_state.player_pos,
-                "locks": deepcopy(cur_state.locks),
-                "results": list(cur_results)
+                "locks": cur_state.locks,
+                "results": cur_results
             }
-            print(f"✔ GOAL FOUND! States explored: {len(visited)}")
-            return goal_snapshot, len(path), path
+            return goal_snapshot, len(visited), path
 
-        # استكشاف الجيران
         class MiniGame:
             def __init__(self, s, r):
                 self.state = s
                 self.results = r
-
-        mg = MiniGame(deepcopy(cur_state), deepcopy(cur_results))
+        
+        mg = MiniGame(cur_state, cur_results)
         successors = get_successors(mg)
 
         for s in successors:
-            h = heuristic(s["grid"], s["player_pos"], s["locks"], cur_state.goal_pos, initial_locks_count)
+            # ✅ تم إضافة s["results"] هنا
+            new_h = heuristic(s["grid"], s["player_pos"], s["locks"], cur_state.goal_pos, s["results"])
             
-            # إنشاء كائن الحالة الجديد
-            level_data = {"rows": len(s["grid"]), "cols": len(s["grid"][0]), "grid": deepcopy(s["grid"])}
+            level_data = {"rows": len(s["grid"]), "cols": len(s["grid"][0]), "grid": s["grid"]}
             new_gs = GameState(level_data)
             new_gs.player_pos = s["player_pos"]
-            new_gs.locks = deepcopy(s["locks"])
+            new_gs.locks = s["locks"]
             new_gs.goal_pos = cur_state.goal_pos
             
-            # إضافة الجار للقائمة (Frontier)
-            frontier.append((h, new_gs, s["results"], path + [s["action"]]))
-            generated += 1
+            counter += 1
+            heapq.heappush(frontier, (new_h, counter, new_gs, s["results"], path + [s["action"]]))
 
-        if len(visited) > max_steps:
-            break
+        if counter > max_nodes: break
 
-    print("✖ No solution found or limit reached.")
-    return None, 0, None
+    print("✖ Failed: The map is too complex for Hill Climbing.")
+    return None, counter, None
